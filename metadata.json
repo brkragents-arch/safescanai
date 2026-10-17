@@ -1,0 +1,6 @@
+{
+  "name": "SafeScan AI — Food, Cosmetics & Fruit Scanner",
+  "description": "Interactive mobile-first health scanner prototype to inspect food and cosmetic ingredients, assess potential concerns, evaluate fruit ripeness via peel color and texture, and cross-reference Tata 1mg.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
