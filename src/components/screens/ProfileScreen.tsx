@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserPreferences } from '../../types/scanner';
-import { User, ShieldCheck, HeartPulse, Sparkles, SlidersHorizontal, Lock, Check, Plus, X, Globe, Save } from 'lucide-react';
+import { User, ShieldCheck, HeartPulse, Sparkles, SlidersHorizontal, Lock, Check, Plus, X, Globe, Save, RotateCcw } from 'lucide-react';
 
 interface Props {
   preferences: UserPreferences;
@@ -58,6 +58,11 @@ export const ProfileScreen: React.FC<Props> = ({
   const [formData, setFormData] = useState<UserPreferences>(preferences);
   const [newAvoidItem, setNewAvoidItem] = useState<string>('');
   const [hasSavedToast, setHasSavedToast] = useState<boolean>(false);
+
+  // Keep form in sync when preferences prop updates (e.g. loaded from remote Supabase DB or reset)
+  useEffect(() => {
+    setFormData(preferences);
+  }, [preferences]);
 
   // Toggle array item helper
   const toggleArrayItem = (key: 'foodAllergies' | 'dietaryPreferences' | 'cosmeticSensitivities', item: string) => {

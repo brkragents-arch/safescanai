@@ -89,7 +89,16 @@ export default function App() {
     return baseCatalog;
   });
 
-  const [userPreferences, setUserPreferences] = useState<UserPreferences>(INITIAL_USER_PREFERENCES);
+  const [userPreferences, setUserPreferences] = useState<UserPreferences>(() => {
+    try {
+      const stored = localStorage.getItem('safescan_preferences');
+      if (stored) {
+        const parsed = JSON.parse(stored) as UserPreferences;
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_USER_PREFERENCES;
+  });
   
   // App scan history state: persisted in localStorage so search/scan items are saved
   const [scanHistory, setScanHistory] = useState<ScanHistoryRecord[]>(() => {
@@ -153,6 +162,9 @@ export default function App() {
       const remotePrefs = await fetchUserPreferencesFromSupabase();
       if (remotePrefs) {
         setUserPreferences(remotePrefs);
+        try {
+          localStorage.setItem('safescan_preferences', JSON.stringify(remotePrefs));
+        } catch (e) {}
       }
     })();
   }, []);
@@ -276,11 +288,17 @@ export default function App() {
 
   const handleSavePreferences = (updated: UserPreferences) => {
     setUserPreferences(updated);
+    try {
+      localStorage.setItem('safescan_preferences', JSON.stringify(updated));
+    } catch (e) {}
     upsertUserPreferencesToSupabase(updated);
   };
 
   const handleResetPreferences = () => {
     setUserPreferences(INITIAL_USER_PREFERENCES);
+    try {
+      localStorage.setItem('safescan_preferences', JSON.stringify(INITIAL_USER_PREFERENCES));
+    } catch (e) {}
     upsertUserPreferencesToSupabase(INITIAL_USER_PREFERENCES);
   };
 
