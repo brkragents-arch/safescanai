@@ -106,6 +106,17 @@ export default function App() {
   // Hydrate & sync with Supabase (`https://yolzjswhzhylduujkyrn.supabase.co`) on startup
   useEffect(() => {
     (async () => {
+      try {
+        const storedKey = localStorage.getItem('safescan_supabase_key');
+        if (storedKey && storedKey.trim().length > 15) {
+          fetch('/api/supabase/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ anonKey: storedKey.trim() }),
+          }).catch(() => {});
+        }
+      } catch (e) {}
+
       const remoteProducts = await fetchProductsFromSupabase();
       if (remoteProducts && remoteProducts.length > 0) {
         setAllProducts((prev) => {

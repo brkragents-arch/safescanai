@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -812,7 +813,21 @@ app.post('/api/supabase/connect', async (req: Request, res: Response) => {
   if (!anonKey || typeof anonKey !== 'string') {
     return res.status(400).json({ error: 'anonKey is required' });
   }
-  configureSupabaseRuntimeKey(anonKey);
+  const cleanKey = anonKey.trim();
+  configureSupabaseRuntimeKey(cleanKey);
+
+  // Also persist into .env (gitignored) if .env still has placeholder, without triggering unnecessary writes if already set
+  try {
+    const envPath = path.resolve(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      const currentEnv = fs.readFileSync(envPath, 'utf8');
+      if (currentEnv.includes('PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE')) {
+        const updatedEnv = currentEnv.replace(/PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE/g, cleanKey);
+        fs.writeFileSync(envPath, updatedEnv, 'utf8');
+      }
+    }
+  } catch (e) {}
+
   const seededCount = await seedProductsToSupabase(productsDb);
   const cfg = getSupabaseConfig();
   res.json({
