@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -21,7 +20,6 @@ import {
 } from './src/utils/productImageGenerator.ts';
 import {
   getSupabaseConfig,
-  configureSupabaseRuntimeKey,
   seedProductsToSupabase,
   upsertProductToSupabase,
   fetchProductsFromSupabase,
@@ -83,6 +81,10 @@ function buildInstamartUrl(query: string): string {
   return `https://www.swiggy.com/instamart/search?custom_back=true&query=${encodeURIComponent(query.trim())}`;
 }
 
+function buildAmazonUrl(query: string): string {
+  return `https://www.amazon.in/s?k=${encodeURIComponent(query.trim())}`;
+}
+
 function enrichSearchItemWithQuickCommerce(item: any): any {
   const cleanName = (item.name || 'Product').replace(/\s*\(Barcode.*?\)/i, '').trim();
   const packSize = item.packSize || 'Standard Retail Pack';
@@ -102,11 +104,14 @@ function enrichSearchItemWithQuickCommerce(item: any): any {
     packSize,
     blinkitPrice: item.blinkitPrice || '₹95',
     instamartPrice: item.instamartPrice || '₹92',
+    amazonPrice: item.amazonPrice || item.blinkitPrice || '₹89',
     blinkitEta: item.blinkitEta || '8 mins',
     instamartEta: item.instamartEta || '10 mins',
+    amazonEta: item.amazonEta || 'Tomorrow',
     blinkitUrl: item.blinkitUrl || buildBlinkitUrl(cleanName),
     instamartUrl: item.instamartUrl || buildInstamartUrl(cleanName),
-    availableOn: item.availableOn || ['blinkit', 'instamart'],
+    amazonUrl: item.amazonUrl || buildAmazonUrl(cleanName),
+    availableOn: item.availableOn || ['blinkit', 'instamart', 'amazon'],
   };
 }
 
@@ -808,34 +813,10 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
-app.post('/api/supabase/connect', async (req: Request, res: Response) => {
-  const { anonKey } = req.body || {};
-  if (!anonKey || typeof anonKey !== 'string') {
-    return res.status(400).json({ error: 'anonKey is required' });
-  }
-  const cleanKey = anonKey.trim();
-  configureSupabaseRuntimeKey(cleanKey);
+// NOTE: The former unauthenticated `POST /api/supabase/connect` endpoint was removed
+// (it allowed anyone to swap the server's DB key and inject lines into .env).
+// The server reads Supabase keys only from `.env`.
 
-  // Also persist into .env (gitignored) if .env still has placeholder, without triggering unnecessary writes if already set
-  try {
-    const envPath = path.resolve(__dirname, '.env');
-    if (fs.existsSync(envPath)) {
-      const currentEnv = fs.readFileSync(envPath, 'utf8');
-      if (currentEnv.includes('PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE')) {
-        const updatedEnv = currentEnv.replace(/PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE/g, cleanKey);
-        fs.writeFileSync(envPath, updatedEnv, 'utf8');
-      }
-    }
-  } catch (e) {}
-
-  const seededCount = await seedProductsToSupabase(productsDb);
-  const cfg = getSupabaseConfig();
-  res.json({
-    success: seededCount > 0,
-    url: cfg.url,
-    seededProductsCount: seededCount,
-  });
-});
 
 // API Documentation / Schema definition
 app.get('/api', (req: Request, res: Response) => {
@@ -1142,10 +1123,11 @@ app.get('/api/suggestions', (req: Request, res: Response) => {
 app.get('/api/search-live', async (req: Request, res: Response) => {
   const q = req.query.q;
   const storeParam = typeof req.query.store === 'string' ? req.query.store : 'all';
-  const store = (storeParam === 'blinkit' || storeParam === 'instamart' ? storeParam : 'all') as
+  const store = (storeParam === 'blinkit' || storeParam === 'instamart' || storeParam === 'amazon' ? storeParam : 'all') as
     | 'all'
     | 'blinkit'
-    | 'instamart';
+    | 'instamart'
+    | 'amazon';
 
   if (!q || typeof q !== 'string' || q.trim().length === 0) {
     return res.status(400).json({ error: 'Query parameter "q" is required' });
@@ -1357,11 +1339,14 @@ app.get('/api/barcode/:code', async (req: Request, res: Response) => {
     match.quickCommerce = match.quickCommerce || {
       blinkitUrl: buildBlinkitUrl(cleanName),
       instamartUrl: buildInstamartUrl(cleanName),
+      amazonUrl: buildAmazonUrl(cleanName),
       blinkitPrice: match.samplePrice?.startsWith('₹') ? match.samplePrice.split('/')[0].trim() : '₹99',
       instamartPrice: match.samplePrice?.startsWith('₹') ? match.samplePrice.split('/')[0].trim() : '₹95',
+      amazonPrice: match.samplePrice?.startsWith('₹') ? match.samplePrice.split('/')[0].trim() : '₹89',
       blinkitEta: '8 mins',
       instamartEta: '10 mins',
-      availableOn: ['blinkit', 'instamart'],
+      amazonEta: 'Tomorrow',
+      availableOn: ['blinkit', 'instamart', 'amazon'],
     };
     return res.json({
       found: true,
@@ -1437,12 +1422,15 @@ app.get('/api/barcode/:code', async (req: Request, res: Response) => {
       quickCommerce: {
         blinkitUrl: qcItem.blinkitUrl || buildBlinkitUrl(qcItem.name),
         instamartUrl: qcItem.instamartUrl || buildInstamartUrl(qcItem.name),
+        amazonUrl: qcItem.amazonUrl || buildAmazonUrl(qcItem.name),
         blinkitPrice: qcItem.blinkitPrice,
         instamartPrice: qcItem.instamartPrice,
+        amazonPrice: qcItem.amazonPrice || qcItem.blinkitPrice || '₹89',
         blinkitEta: qcItem.blinkitEta || '8 mins',
         instamartEta: qcItem.instamartEta || '10 mins',
+        amazonEta: qcItem.amazonEta || 'Tomorrow',
         packSize: qcItem.packSize,
-        availableOn: qcItem.availableOn || ['blinkit', 'instamart'],
+        availableOn: qcItem.availableOn || ['blinkit', 'instamart', 'amazon'],
       },
     };
     productsDb.push(qcProduct);
@@ -1459,11 +1447,14 @@ app.get('/api/barcode/:code', async (req: Request, res: Response) => {
     onlineProduct.quickCommerce = {
       blinkitUrl: buildBlinkitUrl(onlineProduct.name),
       instamartUrl: buildInstamartUrl(onlineProduct.name),
+      amazonUrl: buildAmazonUrl(onlineProduct.name),
       blinkitPrice: '₹125',
       instamartPrice: '₹120',
+      amazonPrice: '₹115',
       blinkitEta: '9 mins',
       instamartEta: '11 mins',
-      availableOn: ['blinkit', 'instamart'],
+      amazonEta: 'Tomorrow',
+      availableOn: ['blinkit', 'instamart', 'amazon'],
     };
     return res.json({
       found: true,
@@ -1479,11 +1470,14 @@ app.get('/api/barcode/:code', async (req: Request, res: Response) => {
     aiProduct.quickCommerce = {
       blinkitUrl: buildBlinkitUrl(cleanName),
       instamartUrl: buildInstamartUrl(cleanName),
+      amazonUrl: buildAmazonUrl(cleanName),
       blinkitPrice: '₹115',
       instamartPrice: '₹110',
+      amazonPrice: '₹105',
       blinkitEta: '9 mins',
       instamartEta: '11 mins',
-      availableOn: ['blinkit', 'instamart'],
+      amazonEta: 'Tomorrow',
+      availableOn: ['blinkit', 'instamart', 'amazon'],
     };
     return res.json({
       found: true,
@@ -1500,11 +1494,14 @@ app.get('/api/barcode/:code', async (req: Request, res: Response) => {
   deterministicFallback.quickCommerce = {
     blinkitUrl: buildBlinkitUrl(cleanName),
     instamartUrl: buildInstamartUrl(cleanName),
+    amazonUrl: buildAmazonUrl(cleanName),
     blinkitPrice: '₹99',
     instamartPrice: '₹95',
+    amazonPrice: '₹89',
     blinkitEta: '8 mins',
     instamartEta: '10 mins',
-    availableOn: ['blinkit', 'instamart'],
+    amazonEta: 'Tomorrow',
+    availableOn: ['blinkit', 'instamart', 'amazon'],
   };
   productsDb.push(deterministicFallback);
   return res.json({
@@ -1588,7 +1585,12 @@ app.post('/api/analyze', async (req: Request, res: Response) => {
   }
 
   const cleanText = text.trim();
-  const productType = type === 'cosmetics' ? 'cosmetics' : 'food';
+  const isCosmeticCandidate =
+    type === 'cosmetics' ||
+    /cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant/i.test(
+      `${productName} ${rawCategory} ${cleanText}`
+    );
+  const productType = isCosmeticCandidate ? 'cosmetics' : type === 'fruit' ? 'fruit' : 'food';
   const resolvedCategory = resolveNormalizedCategoryGroup({
     name: productName,
     category: rawCategory,
@@ -1768,11 +1770,14 @@ Return JSON with this EXACT structure:
         quickCommerce: {
           blinkitUrl: buildBlinkitUrl(productName),
           instamartUrl: buildInstamartUrl(productName),
+          amazonUrl: buildAmazonUrl(productName),
           blinkitPrice: '₹115',
           instamartPrice: '₹112',
+          amazonPrice: '₹109',
           blinkitEta: '8 mins',
           instamartEta: '10 mins',
-          availableOn: ['blinkit', 'instamart'],
+          amazonEta: 'Tomorrow',
+          availableOn: ['blinkit', 'instamart', 'amazon'],
         },
       };
 
@@ -1790,7 +1795,7 @@ Return JSON with this EXACT structure:
   }
 
   // Heuristic Rule-Based Parsing Engine
-  const parsed = parseIngredientsRuleBased(cleanText, productType);
+  const parsed = parseIngredientsRuleBased(cleanText, productType === 'cosmetics' ? 'cosmetics' : 'food');
 
   const generatedProduct: Product = {
     id: `custom_${Date.now()}`,
@@ -1852,11 +1857,14 @@ Return JSON with this EXACT structure:
     quickCommerce: {
       blinkitUrl: buildBlinkitUrl(productName),
       instamartUrl: buildInstamartUrl(productName),
+      amazonUrl: buildAmazonUrl(productName),
       blinkitPrice: '₹115',
       instamartPrice: '₹112',
+      amazonPrice: '₹109',
       blinkitEta: '8 mins',
       instamartEta: '10 mins',
-      availableOn: ['blinkit', 'instamart'],
+      amazonEta: 'Tomorrow',
+      availableOn: ['blinkit', 'instamart', 'amazon'],
     },
   };
 

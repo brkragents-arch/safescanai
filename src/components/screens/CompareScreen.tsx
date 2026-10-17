@@ -18,7 +18,11 @@ import {
   QUICK_COMMERCE_PRODUCTS,
   resolveNormalizedCategoryGroup,
 } from '../../data/quickCommerceCatalog';
-import { buildBlinkitSearchUrl, buildInstamartSearchUrl } from '../../services/apiClient';
+import {
+  buildBlinkitSearchUrl,
+  buildInstamartSearchUrl,
+  buildAmazonSearchUrl,
+} from '../../services/apiClient';
 import {
   resolveExactProductImage,
   isAuthenticProductImageUrl,
@@ -351,6 +355,10 @@ export const CompareScreen: React.FC<Props> = ({
               product.quickCommerce?.blinkitPrice || product.samplePrice.split(' ')[0] || '₹99';
             const instamartPrice =
               product.quickCommerce?.instamartPrice || product.samplePrice.split(' ')[0] || '₹95';
+            const amazonUrl =
+              product.quickCommerce?.amazonUrl || buildAmazonSearchUrl(product.name);
+            const amazonPrice =
+              product.quickCommerce?.amazonPrice || product.samplePrice.split(' ')[0] || '₹89';
 
             return (
               <div key={product.id} className="p-5 flex flex-col justify-between space-y-5">
@@ -405,31 +413,37 @@ export const CompareScreen: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Quick-Commerce Blinkit & Instamart Direct Links */}
-                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  {/* Quick-Commerce Blinkit, Instamart & Amazon Direct Links */}
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
                     <a
                       href={blinkitUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-[11px] font-bold text-amber-950 transition-colors"
+                      className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-[10px] font-bold text-amber-950 transition-colors"
+                      title="View on Blinkit"
                     >
-                      <span className="flex items-center gap-1">
-                        <ShoppingBag size={11} className="text-amber-600" />
-                        Blinkit · {blinkitPrice}
-                      </span>
-                      <ExternalLink size={10} className="text-amber-700" />
+                      <span className="truncate">⚡ {blinkitPrice}</span>
+                      <ExternalLink size={9} className="text-amber-700 shrink-0 ml-0.5" />
                     </a>
                     <a
                       href={instamartUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200/80 text-[11px] font-bold text-orange-950 transition-colors"
+                      className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 border border-orange-200/80 text-[10px] font-bold text-orange-950 transition-colors"
+                      title="View on Swiggy Instamart"
                     >
-                      <span className="flex items-center gap-1">
-                        <ShoppingBag size={11} className="text-orange-600" />
-                        Instamart · {instamartPrice}
-                      </span>
-                      <ExternalLink size={10} className="text-orange-700" />
+                      <span className="truncate">🛒 {instamartPrice}</span>
+                      <ExternalLink size={9} className="text-orange-700 shrink-0 ml-0.5" />
+                    </a>
+                    <a
+                      href={amazonUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-stone-50 hover:bg-amber-50 border border-stone-200 text-[10px] font-bold text-stone-900 transition-colors"
+                      title="Search on Amazon.in"
+                    >
+                      <span className="truncate">📦 {amazonPrice}</span>
+                      <ExternalLink size={9} className="text-stone-600 shrink-0 ml-0.5" />
                     </a>
                   </div>
 

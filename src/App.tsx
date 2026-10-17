@@ -27,10 +27,10 @@ import {
   fetchProductsFromSupabase,
   fetchScanHistoryFromSupabase,
   fetchUserPreferencesFromSupabase,
-  seedProductsToSupabase,
-  upsertProductToSupabase,
   upsertScanHistoryToSupabase,
   upsertUserPreferencesToSupabase,
+  deleteScanHistoryFromSupabase,
+  clearScanHistoryInSupabase,
 } from './services/supabaseService';
 import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
@@ -103,20 +103,11 @@ export default function App() {
     return INITIAL_SCAN_HISTORY;
   });
 
-  // Hydrate & sync with Supabase (`https://yolzjswhzhylduujkyrn.supabase.co`) on startup
+  // Hydrate from Supabase (`https://yolzjswhzhylduujkyrn.supabase.co`) on startup.
+  // Products are read-only for the public key; history & preferences are private
+  // to this visitor's anonymous Supabase user (RLS: user_id = auth.uid()).
   useEffect(() => {
     (async () => {
-      try {
-        const storedKey = localStorage.getItem('safescan_supabase_key');
-        if (storedKey && storedKey.trim().length > 15) {
-          fetch('/api/supabase/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ anonKey: storedKey.trim() }),
-          }).catch(() => {});
-        }
-      } catch (e) {}
-
       const remoteProducts = await fetchProductsFromSupabase();
       if (remoteProducts && remoteProducts.length > 0) {
         setAllProducts((prev) => {
@@ -127,13 +118,36 @@ export default function App() {
           }
           return Array.from(map.values());
         });
-      } else {
-        await seedProductsToSupabase(allProducts);
       }
 
       const remoteHistory = await fetchScanHistoryFromSupabase();
-      if (remoteHistory && remoteHistory.length > 0) {
-        setScanHistory(remoteHistory);
+      if (remoteHistory) {
+        // Make sure every product referenced by history is available to open
+        if (remoteHistory.products.length > 0) {
+          setAllProducts((prev) => {
+            const map = new Map<string, Product>(prev.map((p) => [p.id, p]));
+            for (const sp of remoteHistory.products) {
+              if (!map.has(sp.id)) map.set(sp.id, ensureAccurateProductImage(sp));
+            }
+            return Array.from(map.values());
+          });
+        }
+
+        if (remoteHistory.records.length > 0) {
+          setScanHistory((localHistory) => {
+            // Push any local-only records (made before DB was reachable) up to Supabase
+            const remoteIds = new Set(remoteHistory.records.map((r) => r.id));
+            const localOnly = localHistory.filter(
+              (r) => !remoteIds.has(r.id) && !INITIAL_SCAN_HISTORY.some((i) => i.id === r.id)
+            );
+            for (const r of localOnly) upsertScanHistoryToSupabase(r);
+            const merged = [...localOnly, ...remoteHistory.records];
+            try {
+              localStorage.setItem('safescan_history', JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
+        }
       }
 
       const remotePrefs = await fetchUserPreferencesFromSupabase();
@@ -186,18 +200,21 @@ export default function App() {
       } catch (e) {}
       return updated;
     });
-    upsertProductToSupabase(normalizedProduct);
+    // Note: products are NOT written from the browser any more (public key is read-only
+    // on `products`). The product is stored as a snapshot inside the history row instead.
 
-    // 2. Add to scan history with timestamp + Supabase
+    // 2. Add to scan history with timestamp + Supabase (private to this visitor)
     const now = new Date();
     const timeFormatted = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newRecord: ScanHistoryRecord = {
       id: `hist_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       productId: normalizedProduct.id,
-      scannedAt: `Today, ${timeFormatted}`,
+      scannedAt: `${now.toLocaleDateString([], { day: '2-digit', month: 'short' })}, ${timeFormatted}`,
       method,
     };
 
+    // Older entries for the same product are replaced by the new one (locally and in DB)
+    const replacedRecords = scanHistory.filter((r) => r.productId === normalizedProduct.id);
     setScanHistory((prev) => {
       const filtered = prev.filter((r) => r.productId !== normalizedProduct.id);
       const updated = [newRecord, ...filtered];
@@ -206,7 +223,8 @@ export default function App() {
       } catch (e) {}
       return updated;
     });
-    upsertScanHistoryToSupabase(newRecord);
+    upsertScanHistoryToSupabase(newRecord, normalizedProduct);
+    for (const r of replacedRecords) deleteScanHistoryFromSupabase(r.id);
 
     setSelectedProduct(normalizedProduct);
     setActiveScreen('product-detail');
@@ -228,6 +246,7 @@ export default function App() {
       } catch (e) {}
       return updated;
     });
+    deleteScanHistoryFromSupabase(recordId);
   };
 
   const handleOpenIngredient = (ingredient: Ingredient) => {
@@ -245,6 +264,7 @@ export default function App() {
     try {
       localStorage.removeItem('safescan_history');
     } catch (e) {}
+    clearScanHistoryInSupabase();
   };
 
   const handleRestoreHistory = () => {

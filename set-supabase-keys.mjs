@@ -1,48 +1,47 @@
+// Usage:  node set-supabase-keys.mjs
+// Prompts for keys interactively (so they never land in your shell history)
+// and MERGES them into .env (gitignored) without touching other values such as GEMINI_API_KEY.
 import fs from 'fs';
 import path from 'path';
+import readline from 'readline/promises';
 import { createClient } from '@supabase/supabase-js';
 
 const projectUrl = 'https://yolzjswhzhylduujkyrn.supabase.co';
-const publishableKey = (process.argv[2] || '').trim();
-const secretKey = (process.argv[3] || '').trim();
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-if (!publishableKey || publishableKey.includes('YOUR_')) {
-  console.error('❌ Please replace YOUR_PUBLISHABLE_KEY with your actual Supabase Publishable (or anon) key.');
+const publishableKey = (await rl.question('Supabase Publishable key (sb_publishable_... / anon): ')).trim();
+const secretKey = (
+  await rl.question('Supabase Secret key (optional, server-only — press Enter to skip): ')
+).trim();
+rl.close();
+
+if (!publishableKey || publishableKey.startsWith('sb_secret_')) {
+  console.error('❌ Please enter your Publishable (anon) key — not the Secret key.');
   process.exit(1);
 }
 
-// Write ONLY to .env (which is in .gitignore so it will NEVER be committed to Git).
-// Notice that SUPABASE_SECRET_KEY does NOT have a VITE_ prefix, so Vite never bundles it into the browser!
-const envContent = `SUPABASE_URL="${projectUrl}"
-VITE_SUPABASE_URL="${projectUrl}"
-SUPABASE_PUBLISHABLE_KEY="${publishableKey}"
-VITE_SUPABASE_PUBLISHABLE_KEY="${publishableKey}"
-SUPABASE_ANON_KEY="${publishableKey}"
-VITE_SUPABASE_ANON_KEY="${publishableKey}"
-SUPABASE_SECRET_KEY="${secretKey}"
-SUPABASE_SERVICE_ROLE_KEY="${secretKey}"
-GEMINI_API_KEY="MY_GEMINI_API_KEY"
-APP_URL="http://localhost:3000"
-`;
-fs.writeFileSync(path.resolve('.env'), envContent, 'utf8');
+const envPath = path.resolve('.env');
+const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 
-console.log('🔒 Saved keys exclusively to .env (gitignored). Secret key is strictly backend-only!');
+const updates = {
+  SUPABASE_URL: projectUrl,
+  VITE_SUPABASE_URL: projectUrl,
+  SUPABASE_PUBLISHABLE_KEY: publishableKey,
+  VITE_SUPABASE_PUBLISHABLE_KEY: publishableKey,
+  // Secret key: NO `VITE_` prefix → never bundled into the browser.
+  ...(secretKey ? { SUPABASE_SECRET_KEY: secretKey } : {}),
+};
 
-// Notify running server on port 3000 to connect & seed all Blinkit & Instamart products immediately
-try {
-  const res = await fetch('http://localhost:3000/api/supabase/connect', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ anonKey: secretKey || publishableKey }),
-  });
-  const data = await res.json();
-  console.log(`✅ Connected to ${projectUrl} — Seeded ${data.seededProductsCount || 0} products into Supabase!`);
-} catch (err) {
-  const supabase = createClient(projectUrl, secretKey || publishableKey);
-  const { error } = await supabase.from('products').select('id').limit(1);
-  if (error) {
-    console.error('⚠️ Supabase connection test returned an error:', error.message);
-  } else {
-    console.log(`✅ Verified direct connection to ${projectUrl}!`);
-  }
+let content = existing;
+for (const [k, v] of Object.entries(updates)) {
+  const safe = String(v).replace(/[\r\n"]/g, '');
+  const line = `${k}="${safe}"`;
+  const re = new RegExp(`^${k}=.*$`, 'm');
+  content = re.test(content) ? content.replace(re, () => line) : `${content.trimEnd()}\n${line}\n`;
 }
+fs.writeFileSync(envPath, content, 'utf8');
+console.log('🔒 Keys merged into .env (gitignored). Restart the dev server to pick them up.');
+
+const supabase = createClient(projectUrl, publishableKey);
+const { error } = await supabase.from('products').select('id').limit(1);
+console.log(error ? `⚠️ Connection test error: ${error.message}` : `✅ Verified connection to ${projectUrl}`);

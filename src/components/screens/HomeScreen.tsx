@@ -29,6 +29,7 @@ import {
   QuickCommercePlatform,
   buildBlinkitSearchUrl,
   buildInstamartSearchUrl,
+  buildAmazonSearchUrl,
 } from '../../services/apiClient';
 import {
   filterLocalQuickCommerceSuggestions,
@@ -349,6 +350,20 @@ export const HomeScreen: React.FC<Props> = ({
                   <ShoppingBag size={12} />
                   <span>Instamart.com</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStore('amazon');
+                    setShowSuggestions(true);
+                  }}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    selectedStore === 'amazon'
+                      ? 'bg-amber-300 text-stone-950 shadow-xs'
+                      : 'text-amber-100 hover:bg-white/10'
+                  }`}
+                >
+                  <span>📦 Amazon.in</span>
+                </button>
               </div>
 
               {/* Direct External Store Launchers */}
@@ -373,6 +388,16 @@ export const HomeScreen: React.FC<Props> = ({
                   <span>🛒 Instamart.com</span>
                   <ExternalLink size={11} />
                 </a>
+                <a
+                  href={buildAmazonSearchUrl(searchQuery || 'healthy groceries')}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-100/20 hover:bg-stone-100/30 text-stone-200 border border-stone-300/30 font-semibold transition-colors"
+                  title="Search directly on Amazon.in"
+                >
+                  <span>📦 Amazon.in</span>
+                  <ExternalLink size={11} />
+                </a>
               </div>
             </div>
 
@@ -387,7 +412,9 @@ export const HomeScreen: React.FC<Props> = ({
                       ? 'Search Blinkit.com products, brands, fruits, or barcodes...'
                       : selectedStore === 'instamart'
                       ? 'Search Swiggy Instamart products, brands, fruits, or barcodes...'
-                      : 'Search Blinkit & Instamart products, brands, fruits, or barcodes...'
+                      : selectedStore === 'amazon'
+                      ? 'Search Amazon.in products, cosmetics, groceries, or brands...'
+                      : 'Search Blinkit, Instamart & Amazon items, brands, or barcodes...'
                   }
                   value={searchQuery}
                   onFocus={() => setShowSuggestions(true)}
@@ -468,6 +495,15 @@ export const HomeScreen: React.FC<Props> = ({
                             className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-orange-100 hover:bg-orange-200 text-orange-950 border border-orange-300 inline-flex items-center gap-1 transition-colors"
                           >
                             <span>🛒 Instamart.com</span>
+                            <ExternalLink size={10} />
+                          </a>
+                          <a
+                            href={buildAmazonSearchUrl(searchQuery)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] font-bold px-2.5 py-0.5 rounded-md bg-stone-100 hover:bg-amber-100 text-stone-900 border border-stone-300 inline-flex items-center gap-1 transition-colors"
+                          >
+                            <span>📦 Amazon.in</span>
                             <ExternalLink size={10} />
                           </a>
                         </>
@@ -601,6 +637,20 @@ export const HomeScreen: React.FC<Props> = ({
                                       <ExternalLink size={9} />
                                     </a>
                                   )}
+                                  {(selectedStore === 'all' || selectedStore === 'amazon') && (
+                                    <a
+                                      href={item.amazonUrl || buildAmazonSearchUrl(item.name)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 hover:bg-amber-100 text-stone-900 border border-stone-300 text-[10px] font-bold transition-colors"
+                                      title="View on Amazon.in"
+                                    >
+                                      <span>📦 Amazon: {item.amazonPrice || item.blinkitPrice || '₹89'}</span>
+                                      <span className="text-stone-500 font-normal">({item.amazonEta || 'Tomorrow'})</span>
+                                      <ExternalLink size={9} />
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -684,6 +734,15 @@ export const HomeScreen: React.FC<Props> = ({
                 <span>🛒 All on Instamart.com</span>
                 <ExternalLink size={11} />
               </a>
+              <a
+                href={buildAmazonSearchUrl(searchQuery)}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-amber-100 text-stone-900 border border-stone-300 inline-flex items-center gap-1"
+              >
+                <span>📦 All on Amazon.in</span>
+                <ExternalLink size={11} />
+              </a>
               <button
                 onClick={() => {
                   setSearchResults([]);
@@ -700,6 +759,7 @@ export const HomeScreen: React.FC<Props> = ({
             {searchResults.map((item, idx) => {
               const bUrl = item.blinkitUrl || buildBlinkitSearchUrl(item.name);
               const iUrl = item.instamartUrl || buildInstamartSearchUrl(item.name);
+              const aUrl = item.amazonUrl || buildAmazonSearchUrl(item.name);
               const itemImg = isAuthenticProductImageUrl(item.image)
                 ? item.image
                 : resolveExactProductImage(item);
@@ -761,6 +821,16 @@ export const HomeScreen: React.FC<Props> = ({
                         className="flex-1 py-1 px-2 rounded-lg bg-orange-100 hover:bg-orange-200 text-orange-950 border border-orange-300 text-[10px] font-bold inline-flex items-center justify-center gap-1 transition-colors"
                       >
                         <span>🛒 Instamart {item.instamartPrice || '₹92'}</span>
+                        <ExternalLink size={9} />
+                      </a>
+                      <a
+                        href={aUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-1 py-1 px-2 rounded-lg bg-stone-100 hover:bg-amber-100 text-stone-900 border border-stone-300 text-[10px] font-bold inline-flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <span>📦 Amazon {item.amazonPrice || item.blinkitPrice || '₹89'}</span>
                         <ExternalLink size={9} />
                       </a>
                     </div>

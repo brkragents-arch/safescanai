@@ -138,12 +138,15 @@ export interface SourceGuidelinesAudit {
 export interface QuickCommerceStoreInfo {
   blinkitUrl: string;
   instamartUrl: string;
+  amazonUrl?: string;
   blinkitPrice?: string;
   instamartPrice?: string;
+  amazonPrice?: string;
   blinkitEta?: string;
   instamartEta?: string;
+  amazonEta?: string;
   packSize?: string;
-  availableOn: ('blinkit' | 'instamart')[];
+  availableOn: ('blinkit' | 'instamart' | 'amazon')[];
 }
 
 export interface Product {

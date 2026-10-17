@@ -1,4 +1,5 @@
 import { Product, Ingredient, UserPreferences, ProductType } from '../types/scanner';
+import { lookupBarcodeInBrowser } from './browserBarcodeLookup';
 
 export interface HealthResponse {
   status: string;
@@ -36,7 +37,7 @@ export interface AnalyzeResponse {
   product: Product;
 }
 
-export type QuickCommercePlatform = 'all' | 'blinkit' | 'instamart';
+export type QuickCommercePlatform = 'all' | 'blinkit' | 'instamart' | 'amazon';
 
 export interface LiveSearchResultItem {
   id: string;
@@ -51,11 +52,14 @@ export interface LiveSearchResultItem {
   packSize?: string;
   blinkitPrice?: string;
   instamartPrice?: string;
+  amazonPrice?: string;
   blinkitEta?: string;
   instamartEta?: string;
+  amazonEta?: string;
   blinkitUrl?: string;
   instamartUrl?: string;
-  availableOn?: ('blinkit' | 'instamart')[];
+  amazonUrl?: string;
+  availableOn?: ('blinkit' | 'instamart' | 'amazon')[];
 }
 
 export interface SearchSuggestionsResponse {
@@ -71,6 +75,10 @@ export function buildBlinkitSearchUrl(query: string): string {
 
 export function buildInstamartSearchUrl(query: string): string {
   return `https://www.swiggy.com/instamart/search?custom_back=true&query=${encodeURIComponent(query.trim())}`;
+}
+
+export function buildAmazonSearchUrl(query: string): string {
+  return `https://www.amazon.in/s?k=${encodeURIComponent(query.trim())}`;
 }
 
 export const SafeScanAPI = {
@@ -98,12 +106,23 @@ export const SafeScanAPI = {
   },
 
   async getProductByBarcode(code: string): Promise<{ found: boolean; source?: string; product: Product }> {
-    const res = await fetch(`/api/barcode/${encodeURIComponent(code)}`);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `Barcode ${code} not found`);
+    let backendError = '';
+    try {
+      const res = await fetch(`/api/barcode/${encodeURIComponent(code)}`);
+      const isJson = (res.headers.get('content-type') || '').includes('application/json');
+      if (res.ok && isJson) return res.json();
+      if (isJson) {
+        const err = await res.json().catch(() => ({}));
+        backendError = err.message || '';
+      }
+    } catch (e) {
+      // backend not reachable (e.g. static GitHub Pages deployment)
     }
-    return res.json();
+
+    // Fallback: query Open Food Facts / Open Beauty Facts straight from the browser
+    const product = await lookupBarcodeInBrowser(code);
+    if (product) return { found: true, source: 'open-facts-browser', product };
+    throw new Error(backendError || `Barcode ${code} was not found in Open Food Facts or Open Beauty Facts.`);
   },
 
   async searchLiveProducts(

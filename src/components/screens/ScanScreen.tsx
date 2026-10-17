@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Product, ProductType, UserPreferences } from '../../types/scanner';
 import { 
   Camera, 
@@ -18,14 +18,19 @@ import {
   Apple,
   Zap,
   ShoppingBag,
-  ExternalLink
+  ExternalLink,
+  SwitchCamera,
+  CameraOff,
+  Aperture,
 } from 'lucide-react';
+import { useCamera } from '../../hooks/useCamera';
 import {
   SafeScanAPI,
   LiveSearchResultItem,
   QuickCommercePlatform,
   buildBlinkitSearchUrl,
   buildInstamartSearchUrl,
+  buildAmazonSearchUrl,
 } from '../../services/apiClient';
 import {
   filterLocalQuickCommerceSuggestions,
@@ -56,10 +61,9 @@ export const ScanScreen: React.FC<Props> = ({
   onCancel,
 }) => {
   const [selectedType, setSelectedType] = useState<ProductType>(initialType);
-  const [hasPermission, setHasPermission] = useState<boolean>(true);
-  const [flashlightOn, setFlashlightOn] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
+  const [cameraNotice, setCameraNotice] = useState<string>('');
   
   // Modals & custom input
   const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
@@ -281,6 +285,77 @@ export const ScanScreen: React.FC<Props> = ({
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Real device camera
+  // ---------------------------------------------------------------------------
+  const lastFailedBarcodeRef = useRef<{ code: string; at: number } | null>(null);
+
+  const handleCameraBarcode = async (rawCode: string) => {
+    const code = rawCode.replace(/\D/g, '');
+    if (!code) return;
+    const last = lastFailedBarcodeRef.current;
+    if (last && last.code === code && Date.now() - last.at < 5000) return; // don't hammer an unknown code
+
+    setCameraNotice('');
+    setManualError('');
+    setIsAnalyzing(true);
+    setAnalysisStep(`Barcode ${code} detected — looking it up...`);
+    try {
+      const result = await SafeScanAPI.getProductByBarcode(code);
+      setIsAnalyzing(false);
+      camera.stop();
+      onProductScanned(result.product, 'camera');
+    } catch (err: any) {
+      lastFailedBarcodeRef.current = { code, at: Date.now() };
+      setIsAnalyzing(false);
+      setCameraNotice(err?.message || `Barcode ${code} was not found.`);
+    }
+  };
+
+  const camera = useCamera({
+    onBarcode: handleCameraBarcode,
+    scanBarcodes: selectedType !== 'fruit' && !isAnalyzing,
+  });
+
+  // Auto-start the camera if the user already granted permission earlier
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const perm = await (navigator as any).permissions?.query({ name: 'camera' });
+        if (!cancelled && perm?.state === 'granted') camera.start();
+      } catch (e) {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCapture = async () => {
+    setCameraNotice('');
+    if (selectedType === 'fruit') {
+      const frame = camera.captureFrame();
+      if (!frame) {
+        setCameraNotice('Camera is not ready yet — try again in a second.');
+        return;
+      }
+      handleScanFruit(undefined, frame);
+      return;
+    }
+
+    const code = await camera.detectBarcodeOnce();
+    if (code) {
+      handleCameraBarcode(code);
+    } else if (!camera.barcodeSupported) {
+      setCameraNotice('This browser cannot read barcodes from the camera. Type the number printed under the barcode instead.');
+      setBarcodeModalTab('barcode');
+      setShowBarcodeModal(true);
+    } else {
+      setCameraNotice('No barcode found. Hold the barcode flat, well-lit and inside the frame.');
+    }
+  };
+
   const handleLiveSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanQ = liveSearchQuery.trim();
@@ -313,6 +388,13 @@ export const ScanScreen: React.FC<Props> = ({
     setIsAnalyzing(true);
     setAnalysisStep(`Collecting & analyzing Blinkit & Instamart ingredients for ${item.name}...`);
 
+    const isCosmeticCandidate =
+      item.type === 'cosmetics' ||
+      /cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant/i.test(
+        `${item.name} ${item.category} ${item.subCategory || ''}`
+      );
+    const resolvedType = isCosmeticCandidate ? 'cosmetics' : item.type;
+
     const subCategory = item.subCategory || resolveNormalizedCategoryGroup(item);
     const exactImage = isAuthenticProductImageUrl(item.image)
       ? item.image
@@ -320,14 +402,14 @@ export const ScanScreen: React.FC<Props> = ({
           name: item.name,
           brand: item.brand,
           category: subCategory,
-          type: item.type,
+          type: resolvedType,
           packSize: item.packSize,
         });
 
     try {
       const response = await SafeScanAPI.analyzeIngredients({
         text: item.ingredientsText || item.name,
-        type: item.type,
+        type: resolvedType,
         productName: item.name,
         brand: item.brand,
         category: subCategory,
@@ -340,17 +422,21 @@ export const ScanScreen: React.FC<Props> = ({
         ...response.product,
         name: item.name,
         brand: item.brand,
+        type: resolvedType,
         category: subCategory,
         image: exactImage,
         quickCommerce: {
           blinkitUrl: item.blinkitUrl || buildBlinkitSearchUrl(item.name),
           instamartUrl: item.instamartUrl || buildInstamartSearchUrl(item.name),
+          amazonUrl: item.amazonUrl || buildAmazonSearchUrl(item.name),
           blinkitPrice: item.blinkitPrice || '₹99',
           instamartPrice: item.instamartPrice || '₹95',
+          amazonPrice: item.amazonPrice || item.blinkitPrice || '₹89',
           blinkitEta: item.blinkitEta || '8 mins',
           instamartEta: item.instamartEta || '10 mins',
+          amazonEta: item.amazonEta || 'Tomorrow',
           packSize: item.packSize,
-          availableOn: item.availableOn || ['blinkit', 'instamart'],
+          availableOn: item.availableOn || ['blinkit', 'instamart', 'amazon'],
         },
       };
 
@@ -360,6 +446,7 @@ export const ScanScreen: React.FC<Props> = ({
     } catch (err: any) {
       const fallbackProduct = convertCatalogItemToProduct({
         ...item,
+        type: resolvedType,
         image: exactImage,
         subCategory,
       });
@@ -476,10 +563,23 @@ export const ScanScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Camera Viewport Simulation */}
+      {/* Real Camera Viewport */}
       <div className="relative aspect-[4/5] sm:aspect-[4/3] rounded-3xl overflow-hidden bg-stone-950 shadow-2xl border-4 border-stone-800 flex flex-col justify-between p-5 text-white">
-        <div className="absolute inset-0 bg-gradient-to-b from-stone-900 via-stone-950 to-black opacity-90" />
-        
+        {/* Background / Live Video Element */}
+        <video
+          ref={camera.videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+            camera.status === 'active' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        />
+
+        {camera.status !== 'active' && (
+          <div className="absolute inset-0 bg-gradient-to-b from-stone-900 via-stone-950 to-black opacity-90" />
+        )}
+
         <div
           className="absolute inset-0 opacity-10 pointer-events-none"
           style={{
@@ -491,35 +591,99 @@ export const ScanScreen: React.FC<Props> = ({
         {/* Top Controls Overlay */}
         <div className="relative z-10 flex items-center justify-between">
           <span className="text-[11px] font-mono tracking-wider bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-md border border-white/10 text-emerald-400">
-            {selectedType === 'fruit' ? 'COLOR & TEXTURE COMPUTER VISION · TATA 1MG' : 'OPEN REGISTRIES · REAL-TIME AI'}
+            {camera.status === 'active'
+              ? 'LIVE CAMERA ACTIVE · BARCODE AUTO-SCAN'
+              : selectedType === 'fruit'
+              ? 'COLOR & TEXTURE COMPUTER VISION · TATA 1MG'
+              : 'OPEN REGISTRIES · REAL-TIME AI'}
           </span>
 
           <div className="flex items-center gap-2">
+            {camera.torchSupported && (
+              <button
+                type="button"
+                onClick={camera.toggleTorch}
+                className={`p-2.5 rounded-full transition-colors cursor-pointer ${
+                  camera.torchOn ? 'bg-amber-400 text-stone-950' : 'bg-black/60 text-white hover:bg-black/80'
+                }`}
+                title="Toggle Torch / Flashlight"
+                aria-label="Toggle flashlight"
+              >
+                <Flashlight size={16} />
+              </button>
+            )}
+
+            {camera.status === 'active' && (
+              <button
+                type="button"
+                onClick={camera.flip}
+                className="p-2.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors cursor-pointer"
+                title="Switch Front/Rear Camera"
+                aria-label="Switch camera"
+              >
+                <SwitchCamera size={16} />
+              </button>
+            )}
+
             <button
-              onClick={() => setFlashlightOn(!flashlightOn)}
+              type="button"
+              onClick={() => (camera.status === 'active' ? camera.stop() : camera.start())}
               className={`p-2.5 rounded-full transition-colors cursor-pointer ${
-                flashlightOn ? 'bg-amber-400 text-stone-950' : 'bg-black/60 text-white hover:bg-black/80'
+                camera.status === 'active'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                  : 'bg-black/60 text-white hover:bg-black/80'
               }`}
-              title="Toggle Flashlight"
-              aria-label="Toggle flashlight"
+              title={camera.status === 'active' ? 'Turn Off Camera' : 'Start Camera'}
+              aria-label="Toggle camera"
             >
-              <Flashlight size={16} />
-            </button>
-            <button
-              onClick={() => setHasPermission(!hasPermission)}
-              className="p-2.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors cursor-pointer"
-              title="Simulate Camera Permission State"
-              aria-label="Toggle simulated camera permission"
-            >
-              <RefreshCw size={16} />
+              {camera.status === 'active' ? <Camera size={16} /> : <CameraOff size={16} />}
             </button>
           </div>
         </div>
 
-        {/* Center Scanner Reticle */}
-        {hasPermission ? (
+        {/* Center Scanner Reticle / Live Feed Status */}
+        {camera.status === 'denied' ? (
+          <div className="relative z-10 text-center my-auto p-6 bg-black/80 rounded-2xl border border-red-500/30 max-w-sm mx-auto">
+            <AlertCircle size={36} className="mx-auto text-rose-400 mb-2" />
+            <h3 className="font-bold text-white text-base">Camera Permission Denied</h3>
+            <p className="text-xs text-stone-300 mt-1">
+              Please allow camera access in your browser site permissions to scan barcodes directly.
+            </p>
+            <button
+              type="button"
+              onClick={() => camera.start()}
+              className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
+            >
+              Retry Camera Access
+            </button>
+          </div>
+        ) : camera.status === 'error' || camera.status === 'unsupported' ? (
+          <div className="relative z-10 text-center my-auto p-6 bg-black/80 rounded-2xl border border-amber-500/30 max-w-sm mx-auto">
+            <AlertCircle size={36} className="mx-auto text-amber-400 mb-2" />
+            <h3 className="font-bold text-white text-base">Camera Notice</h3>
+            <p className="text-xs text-stone-300 mt-1">
+              {camera.errorMessage || 'Camera is unavailable. You can use barcode lookup or upload an image.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setBarcodeModalTab('barcode');
+                setShowBarcodeModal(true);
+              }}
+              className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
+            >
+              Enter Barcode Number
+            </button>
+          </div>
+        ) : (
           <div className="relative z-10 flex flex-col items-center justify-center my-auto">
-            <div className={`relative ${selectedType === 'fruit' ? 'w-64 h-64 sm:w-72 sm:h-72 rounded-full border-2 border-emerald-400/40' : 'w-64 h-64 sm:w-80 sm:h-64 rounded-2xl border-2 border-white/20'} flex items-center justify-center overflow-hidden transition-all`}>
+            <div
+              className={`relative ${
+                selectedType === 'fruit'
+                  ? 'w-64 h-64 sm:w-72 sm:h-72 rounded-full border-2 border-emerald-400/40'
+                  : 'w-64 h-64 sm:w-80 sm:h-64 rounded-2xl border-2 border-white/20'
+              } flex items-center justify-center overflow-hidden transition-all`}
+            >
               {selectedType !== 'fruit' && (
                 <>
                   <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
@@ -536,48 +700,70 @@ export const ScanScreen: React.FC<Props> = ({
               <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399] animate-scan-laser pointer-events-none" />
 
               {!isAnalyzing ? (
-                <div className="text-center px-4 py-2 rounded-xl bg-black/40 backdrop-blur-xs border border-white/10 text-xs text-stone-200">
+                <div className="text-center px-4 py-2 rounded-xl bg-black/50 backdrop-blur-xs border border-white/10 text-xs text-stone-200">
                   <p className="font-semibold text-white">
-                    {selectedType === 'fruit' ? 'Position fruit inside reticle' : 'Center barcode or label text'}
+                    {camera.status === 'active'
+                      ? 'Align barcode inside target frame'
+                      : selectedType === 'fruit'
+                      ? 'Position fruit inside reticle'
+                      : 'Center barcode or label text'}
                   </p>
                   <p className="text-[11px] text-stone-400 mt-0.5">
-                    {selectedType === 'fruit'
-                      ? 'Evaluates peel color chroma, skin texture & ripeness stage'
-                      : 'Queries Open Food Facts & Open Beauty Facts'}
+                    {camera.status === 'active'
+                      ? 'Continuous auto-detection is active'
+                      : 'Click "Start Camera" or tap below'}
                   </p>
+                  {camera.status !== 'active' && (
+                    <button
+                      type="button"
+                      onClick={() => camera.start()}
+                      className="mt-2 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Camera size={12} />
+                      <span>Start Camera</span>
+                    </button>
+                  )}
                 </div>
               ) : (
-                <div className="text-center px-4 py-3 rounded-2xl bg-black/80 backdrop-blur-md border border-emerald-500/40 text-xs text-emerald-200 space-y-2 animate-in zoom-in-95">
+                <div className="text-center px-4 py-3 rounded-2xl bg-black/85 backdrop-blur-md border border-emerald-500/40 text-xs text-emerald-200 space-y-2 animate-in zoom-in-95">
                   <RefreshCw size={24} className="mx-auto text-emerald-400 animate-spin" />
                   <p className="font-bold text-white text-sm">{analysisStep}</p>
                   <p className="text-[10px] text-emerald-300/80 font-mono">
-                    {selectedType === 'fruit' ? 'Analyzing color chromatics & tactile firmness...' : 'Backend API searching internet...'}
+                    {selectedType === 'fruit'
+                      ? 'Analyzing color chromatics & tactile firmness...'
+                      : 'Searching live databases...'}
                   </p>
                 </div>
               )}
             </div>
-          </div>
-        ) : (
-          <div className="relative z-10 text-center my-auto p-6 bg-black/80 rounded-2xl border border-red-500/30 max-w-sm mx-auto">
-            <AlertCircle size={36} className="mx-auto text-rose-400 mb-2" />
-            <h3 className="font-bold text-white text-base">Camera Access Restricted</h3>
-            <p className="text-xs text-stone-300 mt-1">
-              Simulated permission denied. In actual usage, camera access enables optical recognition.
-            </p>
-            <button
-              onClick={() => setHasPermission(true)}
-              className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold cursor-pointer"
-            >
-              Grant Simulated Access
-            </button>
+
+            {/* Camera Notice Banner if barcode scan fails */}
+            {cameraNotice && (
+              <div className="mt-3 px-3 py-1.5 rounded-lg bg-rose-950/80 border border-rose-500/50 text-[11px] text-rose-200 text-center max-w-xs animate-in fade-in">
+                {cameraNotice}
+              </div>
+            )}
           </div>
         )}
 
-        <div className="relative z-10 text-center">
-          <p className="text-[11px] text-stone-400 bg-black/50 py-1 px-3 rounded-full inline-block backdrop-blur-xs">
+        {/* Bottom Bar: Capture Frame button if camera is active */}
+        <div className="relative z-10 flex flex-col items-center gap-2">
+          {camera.status === 'active' && (
+            <button
+              type="button"
+              onClick={handleCapture}
+              disabled={isAnalyzing}
+              className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition-all shadow-lg flex items-center gap-2 cursor-pointer border-2 border-white/40"
+            >
+              <Aperture size={16} />
+              <span>{selectedType === 'fruit' ? 'Capture & Analyze Fruit' : 'Capture & Scan Barcode'}</span>
+            </button>
+          )}
+
+          <p className="text-[11px] text-stone-400 bg-black/50 py-1 px-3 rounded-full inline-block backdrop-blur-xs text-center">
             {selectedType === 'fruit'
               ? 'Ripeness & texture analysis grounded in USDA produce standards and Tata 1mg'
-              : 'Live internet product lookups powered by Open Food Facts & SafeScan AI'}
+              : 'Live internet product lookups powered by Open Food Facts, Blinkit & SafeScan AI'}
           </p>
         </div>
       </div>
@@ -1103,6 +1289,15 @@ export const ScanScreen: React.FC<Props> = ({
                     >
                       🛒 Instamart
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setLiveStoreFilter('amazon')}
+                      className={`px-2 py-1 rounded-md text-[10px] font-bold cursor-pointer ${
+                        liveStoreFilter === 'amazon' ? 'bg-amber-300 text-stone-950 shadow-2xs' : 'text-stone-600'
+                      }`}
+                    >
+                      📦 Amazon
+                    </button>
                   </div>
                 </div>
 
@@ -1111,7 +1306,7 @@ export const ScanScreen: React.FC<Props> = ({
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                     <input
                       type="text"
-                      placeholder="Search Blinkit & Instamart (e.g. Amul, Maggi, Cetaphil, Minimalist)..."
+                      placeholder="Search Blinkit, Instamart & Amazon (e.g. Amul, Maggi, Glow & Lovely, Indica)..."
                       value={liveSearchQuery}
                       onChange={(e) => setLiveSearchQuery(e.target.value)}
                       className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-700"
@@ -1152,6 +1347,7 @@ export const ScanScreen: React.FC<Props> = ({
                   {liveSearchResults.map((prod) => {
                     const bUrl = prod.blinkitUrl || buildBlinkitSearchUrl(prod.name);
                     const iUrl = prod.instamartUrl || buildInstamartSearchUrl(prod.name);
+                    const aUrl = prod.amazonUrl || buildAmazonSearchUrl(prod.name);
                     return (
                       <div
                         key={prod.id}
@@ -1194,6 +1390,15 @@ export const ScanScreen: React.FC<Props> = ({
                                 className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-100 text-orange-950 border border-orange-300 text-[9px] font-bold"
                               >
                                 <span>🛒 Instamart {prod.instamartPrice || '₹92'}</span>
+                                <ExternalLink size={8} />
+                              </a>
+                              <a
+                                href={aUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-stone-100 text-stone-900 border border-stone-300 text-[9px] font-bold"
+                              >
+                                <span>📦 Amazon {prod.amazonPrice || prod.blinkitPrice || '₹89'}</span>
                                 <ExternalLink size={8} />
                               </a>
                             </div>

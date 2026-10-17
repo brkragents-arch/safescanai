@@ -15,10 +15,8 @@ import {
 import {
   getSupabaseConfig,
   configureSupabaseRuntimeKey,
-  seedProductsToSupabase,
+  ensureSupabaseUserId,
 } from '../../services/supabaseService';
-import { QUICK_COMMERCE_PRODUCTS } from '../../data/quickCommerceCatalog';
-import { MOCK_PRODUCTS } from '../../data/mockProducts';
 
 interface Props {
   activeScreen: ActiveScreen;
@@ -54,38 +52,20 @@ export const Header: React.FC<Props> = ({
     if (!cleanKey) return;
 
     setIsConnecting(true);
-    setStatusMessage('Connecting to https://yolzjswhzhylduujkyrn.supabase.co & seeding catalog...');
-
-    configureSupabaseRuntimeKey(cleanKey);
+    setStatusMessage('Connecting to https://yolzjswhzhylduujkyrn.supabase.co...');
 
     try {
-      // 1. Seed directly from browser client
-      const allToSeed = [...MOCK_PRODUCTS, ...QUICK_COMMERCE_PRODUCTS];
-      const browserCount = await seedProductsToSupabase(allToSeed);
-
-      // 2. Also notify backend server.ts
-      let serverCount = 0;
-      try {
-        const res = await fetch('/api/supabase/connect', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ anonKey: cleanKey }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          serverCount = data.seededProductsCount || 0;
-        }
-      } catch (err) {}
-
-      const finalCount = Math.max(browserCount, serverCount);
+      // Throws if a Secret / service_role key was pasted
+      configureSupabaseRuntimeKey(cleanKey);
+      const userId = await ensureSupabaseUserId();
       setSbConnected(true);
       setStatusMessage(
-        finalCount > 0
-          ? `✅ Connected! Synced ${finalCount} Blinkit & Instamart products to your Supabase database.`
-          : `✅ Key saved! Connected to https://yolzjswhzhylduujkyrn.supabase.co.`
+        userId
+          ? '✅ Connected! Your scan history will now be saved privately to the database.'
+          : '⚠️ Key saved, but anonymous sign-in failed. Enable "Allow anonymous sign-ins" in Supabase → Authentication.'
       );
     } catch (err: any) {
-      setStatusMessage('Could not verify connection. Check that your Publishable Key is valid.');
+      setStatusMessage(err?.message || 'Could not verify connection. Check that your Publishable Key is valid.');
     } finally {
       setIsConnecting(false);
     }

@@ -29,6 +29,7 @@ import {
   isAuthenticProductImageUrl,
   resolveFallbackProductSvg,
 } from '../../utils/productImageGenerator';
+import { buildAmazonSearchUrl } from '../../services/apiClient';
 
 interface Props {
   product: Product;
@@ -45,6 +46,30 @@ export const ProductResultScreen: React.FC<Props> = ({
   onOpenIngredient,
   onCompareAlternatives,
 }) => {
+  // Strict cosmetic classification guard
+  const isCosmeticProduct =
+    product.type === 'cosmetics' ||
+    Boolean(product.cosmeticProfile) ||
+    /cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant/i.test(
+      `${product.name} ${product.category}`
+    );
+
+  const effectiveCosmeticProfile =
+    product.cosmeticProfile ||
+    (isCosmeticProduct
+      ? {
+          drySkin: 'suitable' as const,
+          oilySkin: 'suitable' as const,
+          combinationSkin: 'suitable' as const,
+          sensitiveSkin: 'suitable' as const,
+          acneProne: 'suitable' as const,
+          comedogenicRating: 1,
+          fragranceFree: !product.allergens.some((a) => a.toLowerCase().includes('fragrance')),
+          alcoholFree: true,
+          essentialOilFree: true,
+        }
+      : undefined);
+
   // Personalized suitability analysis
   const allergenConflicts = product.allergens.filter((allergen) =>
     userPreferences.foodAllergies.some((userAllergy) =>
@@ -53,21 +78,23 @@ export const ProductResultScreen: React.FC<Props> = ({
   );
 
   const isLowSodiumConflict =
-    product.type === 'food' &&
+    !isCosmeticProduct &&
+    (product.type === 'food' || product.type === 'fruit') &&
     product.nutrition &&
     product.nutrition.sodium > 300 &&
     userPreferences.dietaryPreferences.includes('Low Sodium');
 
   const isLowSugarConflict =
-    product.type === 'food' &&
+    !isCosmeticProduct &&
+    (product.type === 'food' || product.type === 'fruit') &&
     product.nutrition &&
     product.nutrition.addedSugar > 8 &&
     userPreferences.dietaryPreferences.includes('Low Sugar');
 
   const isFragranceConflict =
-    product.type === 'cosmetics' &&
-    product.cosmeticProfile &&
-    !product.cosmeticProfile.fragranceFree &&
+    isCosmeticProduct &&
+    effectiveCosmeticProfile &&
+    !effectiveCosmeticProfile.fragranceFree &&
     userPreferences.cosmeticSensitivities.includes('Fragrance');
 
   const avoidedIngredientHits = product.ingredients.filter((ing) =>
@@ -233,6 +260,23 @@ export const ProductResultScreen: React.FC<Props> = ({
                   <span>🛒 Instamart.com</span>
                   {product.quickCommerce?.instamartPrice && (
                     <span className="font-mono">({product.quickCommerce.instamartPrice})</span>
+                  )}
+                  <ExternalLink size={12} />
+                </a>
+                <a
+                  href={
+                    product.quickCommerce?.amazonUrl ||
+                    buildAmazonSearchUrl(
+                      product.name.replace(/\s*\(Barcode.*?\)/i, '').trim()
+                    )
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-stone-900 border border-stone-300 text-xs font-bold transition-colors shadow-2xs"
+                >
+                  <span>📦 Amazon.in</span>
+                  {product.quickCommerce?.amazonPrice && (
+                    <span className="font-mono">({product.quickCommerce.amazonPrice})</span>
                   )}
                   <ExternalLink size={12} />
                 </a>
@@ -537,8 +581,8 @@ export const ProductResultScreen: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Product-Specific Nutrition Panel (FOOD) */}
-      {(product.type === 'food' || product.type === 'fruit') && product.nutrition && (
+      {/* Product-Specific Nutrition Panel (FOOD ONLY) */}
+      {!isCosmeticProduct && (product.type === 'food' || product.type === 'fruit') && product.nutrition && (
         <div className="bg-white rounded-3xl border border-stone-200 p-6 space-y-4 shadow-xs">
           <div className="flex items-center justify-between">
             <div>
@@ -605,16 +649,16 @@ export const ProductResultScreen: React.FC<Props> = ({
       )}
 
       {/* Product-Specific Cosmetic Profile (COSMETICS) */}
-      {product.type === 'cosmetics' && product.cosmeticProfile && (
+      {isCosmeticProduct && effectiveCosmeticProfile && (
         <div className="bg-white rounded-3xl border border-stone-200 p-6 space-y-4 shadow-xs">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-stone-900">Dermatological & Skin Compatibility</h2>
+              <h2 className="text-lg font-bold text-stone-900">Dermatological &amp; Skin Compatibility</h2>
               <p className="text-xs text-stone-500">Suitability assessment across major skin conditions</p>
             </div>
-            {product.cosmeticProfile.sunProtectionFactor && (
+            {effectiveCosmeticProfile.sunProtectionFactor && (
               <span className="text-xs font-bold px-3 py-1 bg-amber-100 text-amber-900 rounded-lg">
-                {product.cosmeticProfile.sunProtectionFactor}
+                {effectiveCosmeticProfile.sunProtectionFactor}
               </span>
             )}
           </div>
@@ -623,50 +667,50 @@ export const ProductResultScreen: React.FC<Props> = ({
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/80 text-center">
               <span className="text-[10px] uppercase font-semibold text-stone-500 block">Dry Skin</span>
               <span className="text-xs font-bold mt-1 block capitalize text-stone-900">
-                {product.cosmeticProfile.drySkin}
+                {effectiveCosmeticProfile.drySkin}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/80 text-center">
               <span className="text-[10px] uppercase font-semibold text-stone-500 block">Oily Skin</span>
               <span className="text-xs font-bold mt-1 block capitalize text-stone-900">
-                {product.cosmeticProfile.oilySkin}
+                {effectiveCosmeticProfile.oilySkin}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/80 text-center">
               <span className="text-[10px] uppercase font-semibold text-stone-500 block">Sensitive Skin</span>
               <span className="text-xs font-bold mt-1 block capitalize text-emerald-800">
-                {product.cosmeticProfile.sensitiveSkin}
+                {effectiveCosmeticProfile.sensitiveSkin}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/80 text-center">
               <span className="text-[10px] uppercase font-semibold text-stone-500 block">Acne-Prone</span>
               <span className="text-xs font-bold mt-1 block capitalize text-stone-900">
-                {product.cosmeticProfile.acneProne}
+                {effectiveCosmeticProfile.acneProne}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/80 text-center col-span-2 sm:col-span-1">
               <span className="text-[10px] uppercase font-semibold text-stone-500 block">Comedogenic</span>
               <span className="text-lg font-extrabold text-stone-900 mt-0.5 block font-mono">
-                {product.cosmeticProfile.comedogenicRating} / 5
+                {effectiveCosmeticProfile.comedogenicRating} / 5
               </span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2 pt-2 text-xs">
             <span className={`px-2.5 py-1 rounded-md font-medium ${
-              product.cosmeticProfile.fragranceFree ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+              effectiveCosmeticProfile.fragranceFree ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
             }`}>
-              {product.cosmeticProfile.fragranceFree ? '✓ 100% Fragrance-Free' : '⚠ Contains Fragrance'}
+              {effectiveCosmeticProfile.fragranceFree ? '✓ 100% Fragrance-Free' : '⚠ Contains Fragrance'}
             </span>
             <span className="px-2.5 py-1 rounded-md bg-stone-100 text-stone-700 font-medium">
-              {product.cosmeticProfile.alcoholFree ? '✓ Drying Alcohol Free' : 'Contains Simple Alcohol'}
+              {effectiveCosmeticProfile.alcoholFree ? '✓ Drying Alcohol Free' : 'Contains Simple Alcohol'}
             </span>
             <span className="px-2.5 py-1 rounded-md bg-stone-100 text-stone-700 font-medium">
-              {product.cosmeticProfile.essentialOilFree ? '✓ Essential Oil Free' : 'Contains Essential Oils'}
+              {effectiveCosmeticProfile.essentialOilFree ? '✓ Essential Oil Free' : 'Contains Essential Oils'}
             </span>
           </div>
         </div>

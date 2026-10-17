@@ -1,4 +1,10 @@
-import { LiveSearchResultItem, QuickCommercePlatform, buildBlinkitSearchUrl, buildInstamartSearchUrl } from '../services/apiClient';
+import {
+  LiveSearchResultItem,
+  QuickCommercePlatform,
+  buildBlinkitSearchUrl,
+  buildInstamartSearchUrl,
+  buildAmazonSearchUrl,
+} from '../services/apiClient';
 import { ProductType, Product, Ingredient, AssessmentLevel } from '../types/scanner';
 import {
   resolveExactProductImage,
@@ -28,6 +34,8 @@ export const POPULAR_QUICK_COMMERCE_KEYWORDS: string[] = [
   'Nutella Hazelnut Spread',
   'Dabur Honey',
   'Aashirvaad Chakki Atta',
+  'Glow & Lovely Face Cream',
+  'Indica Hair Color',
   'Hass Avocado',
   'Desi Hybrid Tomato',
 ];
@@ -732,10 +740,56 @@ const RAW_QUICK_COMMERCE_CATALOG: QuickCommerceCatalogItem[] = [
     availableOn: ['blinkit', 'instamart'],
     searchKeywords: ['sebamed', 'sebamed shampoo', 'shampoo', 'sulfate free shampoo'],
   },
+  {
+    id: 'qc_indica_easy_hair_color',
+    name: 'Indica Easy Shampoo Hair Colour (Natural Black)',
+    brand: 'CavinKare India',
+    barcode: '8902979025010',
+    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=800&q=80',
+    ingredientsText: 'Aqua, Ethanolamine, p-Phenylenediamine, Resorcinol, Sodium Laureth Sulfate, Cocamidopropyl Betaine, Amla (Phyllanthus Emblica) Extract, Henna (Lawsonia Inermis) Extract, Hibiscus Extract, Fenugreek Extract, Bhringraj Extract, Sodium Sulfite, Erythorbic Acid, Tetrasodium EDTA, Fragrance',
+    category: 'Shampoos & Hair Care',
+    subCategory: 'Shampoos & Hair Care',
+    type: 'cosmetics',
+    packSize: '25 ml Sachet / Pack',
+    blinkitPrice: '₹35',
+    instamartPrice: '₹35',
+    amazonPrice: '₹30',
+    blinkitEta: '8 mins',
+    instamartEta: '10 mins',
+    amazonEta: 'Tomorrow',
+    blinkitUrl: buildBlinkitSearchUrl('Indica Easy Shampoo Hair Colour'),
+    instamartUrl: buildInstamartSearchUrl('Indica Easy Shampoo Hair Colour'),
+    amazonUrl: buildAmazonSearchUrl('Indica Easy Shampoo Hair Colour'),
+    availableOn: ['blinkit', 'instamart', 'amazon'],
+    searchKeywords: ['indica', 'indica easy', 'hair color', 'hair colour', 'shampoo hair colour', 'hair dye', 'black hair color'],
+  },
 
   // =====================================================================
   // 11. MOISTURIZERS & BODY LOTIONS (COSMETICS)
   // =====================================================================
+  {
+    id: 'qc_glow_and_lovely_cream',
+    name: 'Glow & Lovely Advanced Multivitamin Face Cream (formerly Fair & Lovely)',
+    brand: 'Hindustan Unilever (HUL)',
+    barcode: '8901030829105',
+    image: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=800&q=80',
+    ingredientsText: 'Water, Palmitic Acid, Stearic Acid, Niacinamide (Vitamin B3), Glycerin, Dimethicone, Ethylhexyl Methoxycinnamate, Butyl Methoxydibenzoylmethane, Titanium Dioxide, Sodium Ascorbyl Phosphate (Vitamin C), Tocopheryl Acetate (Vitamin E), Pyridoxine Hydrochloride (Vitamin B6), Allantoin, Cetyl Alcohol, Phenoxyethanol, Methylparaben, Propylparaben, Perfume',
+    category: 'Moisturizers & Creams',
+    subCategory: 'Moisturizers & Creams',
+    type: 'cosmetics',
+    packSize: '50 g Tube',
+    blinkitPrice: '₹120',
+    instamartPrice: '₹118',
+    amazonPrice: '₹115',
+    blinkitEta: '8 mins',
+    instamartEta: '10 mins',
+    amazonEta: 'Tomorrow',
+    blinkitUrl: buildBlinkitSearchUrl('Glow and Lovely Advanced Multivitamin Face Cream'),
+    instamartUrl: buildInstamartSearchUrl('Glow and Lovely Advanced Multivitamin Face Cream'),
+    amazonUrl: buildAmazonSearchUrl('Glow and Lovely Advanced Multivitamin Face Cream'),
+    availableOn: ['blinkit', 'instamart', 'amazon'],
+    searchKeywords: ['glow & lovely', 'glow and lovely', 'fair & lovely', 'fair and lovely', 'face cream', 'multivitamin cream', 'moisturizer'],
+  },
   {
     id: 'qc_nivea_soft_cream',
     name: 'Nivea Soft Light Moisturising Cream (Vitamin E & Jojoba Oil)',
@@ -1050,13 +1104,15 @@ export function synthesizeExactBlinkitInstamartMatches(
   let brand1 = `${titleQuery.split(' ')[0]} · Blinkit Verified`;
   let brand2 = `${titleQuery.split(' ')[0]} · Swiggy Instamart Verified`;
 
-  if (q.includes('shampoo') || q.includes('conditioner') || q.includes('clinic plus') || q.includes('pantene') || q.includes('head & shoulders') || q.includes('tresemme') || q.includes('loreal')) {
+  if (q.includes('shampoo') || q.includes('conditioner') || q.includes('clinic plus') || q.includes('pantene') || q.includes('head & shoulders') || q.includes('tresemme') || q.includes('loreal') || q.includes('indica') || q.includes('hair color') || q.includes('hair colour') || q.includes('hair dye') || q.includes('godrej expert') || q.includes('garnier color') || q.includes('streax')) {
     type = 'cosmetics';
     subCategory = 'Shampoos & Hair Care';
-    packSize = '180 ml Bottle';
-    price1 = '₹165';
-    price2 = '₹299';
-    ingredients1 = 'Water (Aqua), Sodium Laureth Sulfate (SLES), Cocamidopropyl Betaine, Dimethiconol, Glycerin, Panthenol (Pro-Vitamin B5), Polyquaternium-10, Hydrolyzed Milk/Soy Protein, Perfume (Fragrance), Citric Acid, DMDM Hydantoin, Sodium Chloride';
+    packSize = q.includes('hair color') || q.includes('hair colour') || q.includes('hair dye') || q.includes('indica') ? '25 ml Sachet / Pack' : '180 ml Bottle';
+    price1 = q.includes('indica') || q.includes('hair color') || q.includes('hair colour') ? '₹35' : '₹165';
+    price2 = q.includes('indica') || q.includes('hair color') || q.includes('hair colour') ? '₹35' : '₹299';
+    ingredients1 = q.includes('indica') || q.includes('hair color') || q.includes('hair colour') || q.includes('hair dye')
+      ? 'Aqua, Ethanolamine, p-Phenylenediamine, Resorcinol, Sodium Laureth Sulfate, Cocamidopropyl Betaine, Amla (Phyllanthus Emblica) Extract, Henna Extract, Hibiscus Extract, Bhringraj Extract, Sodium Sulfite, Fragrance'
+      : 'Water (Aqua), Sodium Laureth Sulfate (SLES), Cocamidopropyl Betaine, Dimethiconol, Glycerin, Panthenol (Pro-Vitamin B5), Polyquaternium-10, Hydrolyzed Milk/Soy Protein, Perfume (Fragrance), Citric Acid, DMDM Hydantoin, Sodium Chloride';
     ingredients2 = 'Aqua, Sodium Lauroyl Sarcosinate, Decyl Glucoside, Coco-Glucoside, Vegetable Glycerin, Hydrolyzed Plant Keratin, D-Panthenol, Aloe Barbadensis Leaf Extract, Sodium Benzoate, Potassium Sorbate (Sulfate-Free & Paraben-Free)';
   } else if (q.includes('soap') || q.includes('body wash') || q.includes('shower gel') || q.includes('dettol') || q.includes('lifebuoy') || q.includes('cinthol') || q.includes('medimix') || q.includes('fiama') || q.includes('lux') || q.includes('santoor')) {
     type = 'cosmetics';
@@ -1074,13 +1130,15 @@ export function synthesizeExactBlinkitInstamartMatches(
     price2 = '₹295';
     ingredients1 = 'Aqua, Glycerin, Myristic Acid, Palmitic Acid, Stearic Acid, Potassium Hydroxide, Lauric Acid, Salicylic Acid, Niacinamide, Cocamidopropyl Betaine, Phenoxyethanol, Parfum';
     ingredients2 = 'Aqua, Decyl Glucoside, Sodium Cocoyl Glycinate, Glycerin, Panthenol (Vitamin B5), Niacinamide, Centella Asiatica Extract, Allantoin, Citric Acid, Sodium Benzoate';
-  } else if (q.includes('cream') || q.includes('moisturiz') || q.includes('lotion') || q.includes('vaseline') || q.includes('boroplus') || q.includes('boroline') || q.includes('lacto calamine')) {
+  } else if (q.includes('cream') || q.includes('moisturiz') || q.includes('lotion') || q.includes('vaseline') || q.includes('boroplus') || q.includes('boroline') || q.includes('lacto calamine') || q.includes('glow & lovely') || q.includes('glow and lovely') || q.includes('fair & lovely') || q.includes('fair and lovely')) {
     type = 'cosmetics';
     subCategory = 'Moisturizers & Creams';
-    packSize = '150 ml Tube / Jar';
-    price1 = '₹199';
-    price2 = '₹349';
-    ingredients1 = 'Aqua, Glycerin, Stearic Acid, Isopropyl Myristate, Mineral Oil (Paraffinum Liquidum), Glyceryl Stearate, Cetyl Alcohol, Dimethicone, Tocopheryl Acetate (Vitamin E), Triethanolamine, Phenoxyethanol, Methylparaben, Parfum';
+    packSize = q.includes('glow') || q.includes('lovely') || q.includes('fair') ? '50 g Tube' : '150 ml Tube / Jar';
+    price1 = q.includes('glow') || q.includes('lovely') || q.includes('fair') ? '₹120' : '₹199';
+    price2 = q.includes('glow') || q.includes('lovely') || q.includes('fair') ? '₹118' : '₹349';
+    ingredients1 = q.includes('glow') || q.includes('lovely') || q.includes('fair')
+      ? 'Water, Palmitic Acid, Stearic Acid, Niacinamide (Vitamin B3), Glycerin, Dimethicone, Ethylhexyl Methoxycinnamate, Butyl Methoxydibenzoylmethane, Titanium Dioxide, Sodium Ascorbyl Phosphate (Vitamin C), Tocopheryl Acetate (Vitamin E), Phenoxyethanol, Perfume'
+      : 'Aqua, Glycerin, Stearic Acid, Isopropyl Myristate, Mineral Oil (Paraffinum Liquidum), Glyceryl Stearate, Cetyl Alcohol, Dimethicone, Tocopheryl Acetate (Vitamin E), Triethanolamine, Phenoxyethanol, Methylparaben, Parfum';
     ingredients2 = 'Aqua, Vegetable Glycerin, Caprylic/Capric Triglyceride, Ceramide NP, Squalane, Sodium Hyaluronate, Panthenol, Cetearyl Alcohol, Butyrospermum Parkii (Shea) Butter, Phenoxyethanol';
   } else if (q.includes('sunscreen') || q.includes('spf') || q.includes('aqualogica') || q.includes('derma co') || q.includes('dot & key') || q.includes('uv')) {
     type = 'cosmetics';
@@ -1214,11 +1272,14 @@ export function synthesizeExactBlinkitInstamartMatches(
       packSize,
       blinkitPrice: price1,
       instamartPrice: price1,
+      amazonPrice: price1,
       blinkitEta: '8 mins',
       instamartEta: '10 mins',
+      amazonEta: 'Tomorrow',
       blinkitUrl: buildBlinkitSearchUrl(cleanQuery),
       instamartUrl: buildInstamartSearchUrl(cleanQuery),
-      availableOn: ['blinkit', 'instamart'],
+      amazonUrl: buildAmazonSearchUrl(cleanQuery),
+      availableOn: ['blinkit', 'instamart', 'amazon'],
     },
     {
       id: `qc_exact_2_${q.replace(/[^a-z0-9]/g, '_')}`,
@@ -1240,11 +1301,14 @@ export function synthesizeExactBlinkitInstamartMatches(
       packSize,
       blinkitPrice: price2,
       instamartPrice: price2,
+      amazonPrice: price2,
       blinkitEta: '9 mins',
       instamartEta: '11 mins',
+      amazonEta: 'Tomorrow',
       blinkitUrl: buildBlinkitSearchUrl(`${cleanQuery} pack`),
       instamartUrl: buildInstamartSearchUrl(`${cleanQuery} pack`),
-      availableOn: ['blinkit', 'instamart'],
+      amazonUrl: buildAmazonSearchUrl(`${cleanQuery} pack`),
+      availableOn: ['blinkit', 'instamart', 'amazon'],
     },
   ];
 }
@@ -1367,7 +1431,17 @@ export function resolveNormalizedCategoryGroup(productOrCategory: {
   const combined = `${cat} ${name}`;
 
   // Cosmetics sub-categories
-  if (combined.includes('shampoo') || combined.includes('conditioner') || combined.includes('hair oil') || combined.includes('hair care')) {
+  if (
+    combined.includes('shampoo') ||
+    combined.includes('conditioner') ||
+    combined.includes('hair oil') ||
+    combined.includes('hair care') ||
+    combined.includes('hair color') ||
+    combined.includes('hair colour') ||
+    combined.includes('hair dye') ||
+    combined.includes('indica') ||
+    combined.includes('colorant')
+  ) {
     return 'Shampoos & Hair Care';
   }
   if (combined.includes('toothpaste') || combined.includes('oral care') || combined.includes('dental') || combined.includes('red paste')) {
@@ -1385,7 +1459,17 @@ export function resolveNormalizedCategoryGroup(productOrCategory: {
   if (combined.includes('serum') || combined.includes('elixir') || combined.includes('niacinamide') || combined.includes('vitamin c serum')) {
     return 'Serums & Actives';
   }
-  if (combined.includes('moisturiz') || combined.includes('cream') || combined.includes('lotion') || combined.includes('gel') || combined.includes('emulsion')) {
+  if (
+    combined.includes('moisturiz') ||
+    combined.includes('cream') ||
+    combined.includes('lotion') ||
+    combined.includes('gel') ||
+    combined.includes('emulsion') ||
+    combined.includes('glow & lovely') ||
+    combined.includes('glow and lovely') ||
+    combined.includes('fair & lovely') ||
+    combined.includes('fair and lovely')
+  ) {
     return 'Moisturizers & Creams';
   }
 
@@ -1633,12 +1717,15 @@ export function convertCatalogItemToProduct(item: QuickCommerceCatalogItem): Pro
     quickCommerce: {
       blinkitUrl: item.blinkitUrl || buildBlinkitSearchUrl(item.name),
       instamartUrl: item.instamartUrl || buildInstamartSearchUrl(item.name),
+      amazonUrl: item.amazonUrl || buildAmazonSearchUrl(item.name),
       blinkitPrice: item.blinkitPrice,
       instamartPrice: item.instamartPrice,
+      amazonPrice: item.amazonPrice || item.blinkitPrice || '₹99',
       blinkitEta: item.blinkitEta || '8 mins',
       instamartEta: item.instamartEta || '10 mins',
+      amazonEta: item.amazonEta || 'Tomorrow',
       packSize: item.packSize,
-      availableOn: item.availableOn || ['blinkit', 'instamart'],
+      availableOn: item.availableOn || ['blinkit', 'instamart', 'amazon'],
     },
   };
 }

@@ -35,6 +35,11 @@ jobs:
 
       - name: Build static site
         run: npm run build
+        env:
+          # Publishable (anon) key only — safe in browser bundle, protected by RLS.
+          # NEVER add SUPABASE_SECRET_KEY here: GitHub Pages is static, everything ships to the browser.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
