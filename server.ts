@@ -733,7 +733,12 @@ Return ONLY a valid JSON object wrapped in \`\`\`json ... \`\`\` code block with
 
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
-        const productType = parsed.type === 'cosmetics' ? 'cosmetics' : 'food';
+        const isPersonalCare =
+          parsed.type === 'cosmetics' ||
+          /toothpaste|dental|oral care|mouthwash|tooth powder|dentifrice|colgate|sensodyne|dabur red|pepsodent|meswak|vicco|cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant|body wash|shower gel|deodorant|antiperspirant|perfume|cologne|fragrance|talc|powder/i.test(
+            `${parsed.name || ''} ${parsed.category || ''}`
+          );
+        const productType = isPersonalCare ? 'cosmetics' : 'food';
         const image = parsed.image && parsed.image.startsWith('http') ? parsed.image : pickCuratedProductImage(productType, cleanCode);
 
         const realProduct: Product = {
@@ -741,7 +746,7 @@ Return ONLY a valid JSON object wrapped in \`\`\`json ... \`\`\` code block with
           name: parsed.name ? (parsed.name.includes(cleanCode) ? parsed.name : `${parsed.name} (Barcode ${cleanCode})`) : `Product #${cleanCode}`,
           brand: parsed.brand || 'Commercial Brand',
           type: productType,
-          category: parsed.category || (productType === 'cosmetics' ? 'Dermatological Skincare' : 'Packaged Grocery'),
+          category: parsed.category || (productType === 'cosmetics' ? 'Personal Care & Hygiene' : 'Packaged Grocery'),
           image,
           barcode: cleanCode,
           assessment: parsed.assessment || 'low',
@@ -1587,7 +1592,7 @@ app.post('/api/analyze', async (req: Request, res: Response) => {
   const cleanText = text.trim();
   const isCosmeticCandidate =
     type === 'cosmetics' ||
-    /cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant/i.test(
+    /toothpaste|dental|oral care|mouthwash|tooth powder|dentifrice|colgate|sensodyne|dabur red|pepsodent|meswak|vicco|cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant|body wash|shower gel|deodorant|antiperspirant|perfume|cologne|fragrance|talc|powder/i.test(
       `${productName} ${rawCategory} ${cleanText}`
     );
   const productType = isCosmeticCandidate ? 'cosmetics' : type === 'fruit' ? 'fruit' : 'food';

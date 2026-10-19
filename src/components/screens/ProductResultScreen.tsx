@@ -30,6 +30,7 @@ import {
   resolveFallbackProductSvg,
 } from '../../utils/productImageGenerator';
 import { buildAmazonSearchUrl } from '../../services/apiClient';
+import { isCosmeticOrPersonalCare } from '../../utils/productClassifier';
 
 interface Props {
   product: Product;
@@ -46,13 +47,8 @@ export const ProductResultScreen: React.FC<Props> = ({
   onOpenIngredient,
   onCompareAlternatives,
 }) => {
-  // Strict cosmetic classification guard
-  const isCosmeticProduct =
-    product.type === 'cosmetics' ||
-    Boolean(product.cosmeticProfile) ||
-    /cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant/i.test(
-      `${product.name} ${product.category}`
-    );
+  // Strict cosmetic and personal care classification guard (e.g. toothpaste, shampoo, lotions, cosmetics)
+  const isCosmeticProduct = isCosmeticOrPersonalCare(product);
 
   const effectiveCosmeticProfile =
     product.cosmeticProfile ||
@@ -716,11 +712,82 @@ export const ProductResultScreen: React.FC<Props> = ({
         </div>
       )}
 
+      {/* Harmful Ingredient & Chemical Analysis for Cosmetics & Personal Care */}
+      {isCosmeticProduct && (
+        <div className="bg-white rounded-3xl border border-stone-200 p-6 space-y-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldAlert size={20} className="text-amber-800" />
+              <div>
+                <h2 className="text-lg font-bold text-stone-900">Harmful Ingredient &amp; Chemical Analysis</h2>
+                <p className="text-xs text-stone-500">Toxicological screening for harsh sulfates, parabens, endocrine disruptors &amp; irritants</p>
+              </div>
+            </div>
+            <span className="text-xs font-bold px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg">
+              {product.ingredients.filter((i) => i.concernLevel === 'high' || i.concernLevel === 'moderate').length} Monitored Compounds
+            </span>
+          </div>
+
+          {/* Quick Screening Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+            {(() => {
+              const ingNames = product.ingredients.map((i) => `${i.name} ${i.inciOrAltNames.join(' ')}`.toLowerCase()).join(' ');
+              const hasSLS = /lauryl sulfate|sls|sodium laureth sulfate/i.test(ingNames);
+              const hasParabens = /paraben/i.test(ingNames);
+              const hasPhthalates = /phthalate/i.test(ingNames);
+              const hasTriclosan = /triclosan|triclocarban/i.test(ingNames);
+              const hasFormaldehyde = /formaldehyde|dmdm hydantoin|quaternium-15|imidazolidinyl/i.test(ingNames);
+              const hasSyntheticColor = /ci \d+|fd&c|d&c|red \d+|yellow \d+|blue \d+/i.test(ingNames);
+              const hasFragrance = /fragrance|parfum|perfume|aroma/i.test(ingNames);
+              const hasMicroplastics = /polyethylene|carbomer|dimethicone/i.test(ingNames);
+
+              const screens = [
+                { label: 'Sulfates (SLS/SLES)', detected: hasSLS, risk: 'Drying / Oral & Skin Irritant' },
+                { label: 'Parabens', detected: hasParabens, risk: 'Endocrine Disruption Risk' },
+                { label: 'Triclosan / Microbicides', detected: hasTriclosan, risk: 'Antimicrobial Resistance' },
+                { label: 'Formaldehyde Donors', detected: hasFormaldehyde, risk: 'Carcinogen & Strong Allergen' },
+                { label: 'Phthalates', detected: hasPhthalates, risk: 'Reproductive Toxicity Risk' },
+                { label: 'Synthetic Dyes / Colorants', detected: hasSyntheticColor, risk: 'Potential Skin Sensitizer' },
+                { label: 'Fragrance / Parfum', detected: hasFragrance, risk: 'Contact Dermatitis Trigger' },
+                { label: 'Microplastics / Polymers', detected: hasMicroplastics, risk: 'Environmental / Membrane Impact' },
+              ];
+
+              return screens.map((s, idx) => (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-2xl border text-left transition-all ${
+                    s.detected
+                      ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                      : 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold truncate">{s.label}</span>
+                    <span
+                      className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                        s.detected ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-white'
+                      }`}
+                    >
+                      {s.detected ? 'Detected' : 'Free'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    {s.detected ? `Flagged: ${s.risk}` : 'Not detected in declared formulation'}
+                  </p>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Potential Concerns with Plain Explanations */}
       <div className="bg-white rounded-3xl border border-stone-200 p-6 space-y-4 shadow-xs">
         <div className="flex items-center gap-2">
           <ShieldAlert size={20} className="text-stone-700" />
-          <h2 className="text-lg font-bold text-stone-900">Potential Concerns & Scientific Context</h2>
+          <h2 className="text-lg font-bold text-stone-900">
+            {isCosmeticProduct ? 'Toxicological Concerns & Chemical Benchmark' : 'Potential Concerns & Scientific Context'}
+          </h2>
         </div>
 
         <div className="space-y-3">

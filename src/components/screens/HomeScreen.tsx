@@ -41,6 +41,7 @@ import {
   isAuthenticProductImageUrl,
   resolveFallbackProductSvg,
 } from '../../utils/productImageGenerator';
+import { isCosmeticOrPersonalCare } from '../../utils/productClassifier';
 
 interface Props {
   onScanFood: () => void;
@@ -212,6 +213,8 @@ export const HomeScreen: React.FC<Props> = ({
     setIsResolvingItem(true);
     setResolvingStatus(`Collecting & analyzing Blinkit / Instamart ingredients for ${item.name}...`);
 
+    const isCosmeticCandidate = isCosmeticOrPersonalCare(item);
+    const resolvedType = isCosmeticCandidate ? 'cosmetics' : item.type;
     const subCategory = item.subCategory || resolveNormalizedCategoryGroup(item);
     const exactImage = isAuthenticProductImageUrl(item.image)
       ? item.image
@@ -219,14 +222,14 @@ export const HomeScreen: React.FC<Props> = ({
           name: item.name,
           brand: item.brand,
           category: subCategory,
-          type: item.type,
+          type: resolvedType,
           packSize: item.packSize,
         });
 
     try {
       const response = await SafeScanAPI.analyzeIngredients({
         text: item.ingredientsText || item.name,
-        type: item.type,
+        type: resolvedType,
         productName: item.name,
         brand: item.brand,
         category: subCategory,
@@ -239,17 +242,20 @@ export const HomeScreen: React.FC<Props> = ({
         ...response.product,
         name: item.name,
         brand: item.brand,
+        type: resolvedType,
         category: subCategory,
         image: exactImage,
         quickCommerce: {
           blinkitUrl: item.blinkitUrl || buildBlinkitSearchUrl(item.name),
           instamartUrl: item.instamartUrl || buildInstamartSearchUrl(item.name),
+          amazonUrl: item.amazonUrl || buildAmazonSearchUrl(item.name),
           blinkitPrice: item.blinkitPrice || '₹99',
           instamartPrice: item.instamartPrice || '₹95',
+          amazonPrice: item.amazonPrice || item.blinkitPrice || '₹89',
           blinkitEta: item.blinkitEta || '8 mins',
           instamartEta: item.instamartEta || '10 mins',
           packSize: item.packSize,
-          availableOn: item.availableOn || ['blinkit', 'instamart'],
+          availableOn: item.availableOn || ['blinkit', 'instamart', 'amazon'],
         },
       };
 
@@ -261,6 +267,7 @@ export const HomeScreen: React.FC<Props> = ({
       // Fallback to local Blinkit/Instamart ingredient parser so exact item always opens cleanly
       const fallbackProduct = convertCatalogItemToProduct({
         ...item,
+        type: resolvedType,
         image: exactImage,
         subCategory,
       });

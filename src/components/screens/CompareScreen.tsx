@@ -28,6 +28,7 @@ import {
   isAuthenticProductImageUrl,
   resolveFallbackProductSvg,
 } from '../../utils/productImageGenerator';
+import { isCosmeticOrPersonalCare } from '../../utils/productClassifier';
 
 interface Props {
   initialProductId?: string;
@@ -499,8 +500,8 @@ export const CompareScreen: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Nutrition Comparison (Food) */}
-                  {product.type === 'food' && product.nutrition && (
+                  {/* Nutrition Comparison (Food Only — Never for Toothpaste, Cosmetics, or Personal Care) */}
+                  {!isCosmeticOrPersonalCare(product) && product.type === 'food' && product.nutrition && (
                     <div className="pt-3">
                       <span className="font-bold text-stone-800 uppercase tracking-wider text-[10px] block mb-1.5">
                         Nutrition Breakdown ({product.nutrition.servingSize})
@@ -542,31 +543,33 @@ export const CompareScreen: React.FC<Props> = ({
                     </div>
                   )}
 
-                  {/* Cosmetic Suitability (Cosmetics) */}
-                  {product.type === 'cosmetics' && product.cosmeticProfile && (
+                  {/* Cosmetic & Personal Care Suitability (Cosmetics, Toothpastes, Shampoos) */}
+                  {isCosmeticOrPersonalCare(product) && (
                     <div className="pt-3">
                       <span className="font-bold text-stone-800 uppercase tracking-wider text-[10px] block mb-1.5">
-                        Skin &amp; Scalp Compatibility
+                        Personal Care &amp; Safety Profile
                       </span>
                       <div className="space-y-1">
                         <div className="flex justify-between py-0.5">
-                          <span className="text-stone-500">Sensitive Skin:</span>
+                          <span className="text-stone-500">Sensitive Tolerance:</span>
                           <span className="font-semibold capitalize text-stone-900">
-                            {product.cosmeticProfile.sensitiveSkin}
+                            {product.cosmeticProfile?.sensitiveSkin || 'Suitable'}
                           </span>
                         </div>
                         <div className="flex justify-between py-0.5">
                           <span className="text-stone-500">Fragrance Free:</span>
                           <span className="font-semibold text-stone-900">
-                            {product.cosmeticProfile.fragranceFree
+                            {product.cosmeticProfile?.fragranceFree ?? !product.allergens.some((a) => a.toLowerCase().includes('fragrance'))
                               ? 'Yes (Clean)'
                               : 'Contains Fragrance'}
                           </span>
                         </div>
                         <div className="flex justify-between py-0.5">
-                          <span className="text-stone-500">Comedogenic Rating:</span>
-                          <span className="font-mono font-bold text-stone-900">
-                            {product.cosmeticProfile.comedogenicRating} / 5
+                          <span className="text-stone-500">Harsh Sulfates (SLS):</span>
+                          <span className="font-semibold text-stone-900">
+                            {product.ingredients.some((i) => /lauryl sulfate|sls/i.test(`${i.name} ${i.inciOrAltNames.join(' ')}`))
+                              ? 'Contains SLS'
+                              : 'SLS-Free'}
                           </span>
                         </div>
                       </div>

@@ -42,6 +42,7 @@ import {
   isAuthenticProductImageUrl,
   resolveFallbackProductSvg,
 } from '../../utils/productImageGenerator';
+import { isCosmeticOrPersonalCare } from '../../utils/productClassifier';
 
 interface Props {
   initialType?: ProductType;
@@ -388,11 +389,7 @@ export const ScanScreen: React.FC<Props> = ({
     setIsAnalyzing(true);
     setAnalysisStep(`Collecting & analyzing Blinkit & Instamart ingredients for ${item.name}...`);
 
-    const isCosmeticCandidate =
-      item.type === 'cosmetics' ||
-      /cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant/i.test(
-        `${item.name} ${item.category} ${item.subCategory || ''}`
-      );
+    const isCosmeticCandidate = isCosmeticOrPersonalCare(item);
     const resolvedType = isCosmeticCandidate ? 'cosmetics' : item.type;
 
     const subCategory = item.subCategory || resolveNormalizedCategoryGroup(item);

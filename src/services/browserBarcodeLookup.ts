@@ -1,4 +1,5 @@
 import { Product, Ingredient } from '../types/scanner';
+import { isCosmeticOrPersonalCare } from '../utils/productClassifier';
 
 /**
  * Browser-side barcode lookup against Open Food Facts / Open Beauty Facts.
@@ -103,12 +104,21 @@ export async function lookupBarcodeInBrowser(rawCode: string): Promise<Product |
       const parsed = parseIngredients(ingText || '');
       const n = p.nutriments || {};
 
+      const rawCategory = (p.categories || (src.type === 'food' ? 'Packaged Food' : 'Personal Care')).split(',')[0].trim();
+      const isPersonalCare = isCosmeticOrPersonalCare({
+        type: src.type,
+        name,
+        category: rawCategory,
+        ingredientsText: ingText,
+      });
+      const resolvedType: 'food' | 'cosmetics' = isPersonalCare ? 'cosmetics' : src.type;
+
       return {
         id: `cam_${code}`,
         name,
         brand,
-        type: src.type,
-        category: (p.categories || (src.type === 'food' ? 'Packaged Food' : 'Personal Care')).split(',')[0].trim(),
+        type: resolvedType,
+        category: isPersonalCare && resolvedType === 'cosmetics' && rawCategory === 'Packaged Food' ? 'Personal Care & Oral Hygiene' : rawCategory,
         image: onlyHttps(p.image_front_url || p.image_url),
         barcode: code,
         assessment: ingText ? parsed.worst : 'insufficient',
@@ -119,7 +129,7 @@ export async function lookupBarcodeInBrowser(rawCode: string): Promise<Product |
         confidence: ingText ? 'Moderate' : 'Provisional',
         allergens: parsed.allergens.length ? parsed.allergens : ['No major allergens flagged'],
         nutrition:
-          src.type === 'food'
+          resolvedType === 'food' && !isPersonalCare
             ? {
                 servingSize: '100 g',
                 calories: Math.round(n['energy-kcal_100g'] || 0),
@@ -131,6 +141,20 @@ export async function lookupBarcodeInBrowser(rawCode: string): Promise<Product |
                 totalSugar: n.sugars_100g || 0,
                 addedSugar: 0,
                 protein: n.proteins_100g || 0,
+              }
+            : undefined,
+        cosmeticProfile:
+          resolvedType === 'cosmetics'
+            ? {
+                drySkin: 'suitable',
+                oilySkin: 'suitable',
+                combinationSkin: 'suitable',
+                sensitiveSkin: parsed.allergens.length > 0 ? 'caution' : 'suitable',
+                acneProne: 'suitable',
+                comedogenicRating: 1,
+                fragranceFree: !parsed.allergens.some((a) => a.toLowerCase().includes('fragrance')),
+                alcoholFree: true,
+                essentialOilFree: true,
               }
             : undefined,
         ingredients: parsed.ingredients,
