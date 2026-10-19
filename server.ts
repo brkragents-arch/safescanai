@@ -735,7 +735,7 @@ Return ONLY a valid JSON object wrapped in \`\`\`json ... \`\`\` code block with
         const parsed = JSON.parse(jsonMatch[1]);
         const isPersonalCare =
           parsed.type === 'cosmetics' ||
-          /toothpaste|dental|oral care|mouthwash|tooth powder|dentifrice|colgate|sensodyne|dabur red|pepsodent|meswak|vicco|cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant|body wash|shower gel|deodorant|antiperspirant|perfume|cologne|fragrance|talc|powder/i.test(
+          /sebamed|cleans|syndet|bathing bar|toilet soap|body bar|beauty bar|face bar|toothpaste|dental|oral care|mouthwash|tooth powder|dentifrice|colgate|sensodyne|dabur red|pepsodent|meswak|vicco|cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant|body wash|shower gel|deodorant|antiperspirant|perfume|cologne|fragrance|talc|powder/i.test(
             `${parsed.name || ''} ${parsed.category || ''}`
           );
         const productType = isPersonalCare ? 'cosmetics' : 'food';
@@ -1592,7 +1592,7 @@ app.post('/api/analyze', async (req: Request, res: Response) => {
   const cleanText = text.trim();
   const isCosmeticCandidate =
     type === 'cosmetics' ||
-    /toothpaste|dental|oral care|mouthwash|tooth powder|dentifrice|colgate|sensodyne|dabur red|pepsodent|meswak|vicco|cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant|body wash|shower gel|deodorant|antiperspirant|perfume|cologne|fragrance|talc|powder/i.test(
+    /sebamed|cleans|syndet|bathing bar|toilet soap|body bar|beauty bar|face bar|toothpaste|dental|oral care|mouthwash|tooth powder|dentifrice|colgate|sensodyne|dabur red|pepsodent|meswak|vicco|cream|lotion|serum|hair|shampoo|conditioner|face wash|cleanser|sunscreen|soap|moisturiz|indica|glow & lovely|glow and lovely|fair & lovely|fair and lovely|lipstick|kajal|mascara|makeup|dye|colorant|body wash|shower gel|deodorant|antiperspirant|perfume|cologne|fragrance|talc|powder/i.test(
       `${productName} ${rawCategory} ${cleanText}`
     );
   const productType = isCosmeticCandidate ? 'cosmetics' : type === 'fruit' ? 'fruit' : 'food';
